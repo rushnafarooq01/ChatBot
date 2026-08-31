@@ -10,9 +10,23 @@ from langchain_groq import ChatGroq
 
 load_dotenv()
 
+# On Streamlit Cloud, secrets come from st.secrets (not a .env file).
+# This makes the key available locally (.env) AND on Streamlit Cloud (secrets).
 if "GROQ_API_KEY" in st.secrets:
     os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
-    
+
+# Friendly error instead of a crash if the key is still missing
+if not os.getenv("GROQ_API_KEY"):
+    st.error(
+        "⚠️ GROQ_API_KEY not found.\n\n"
+        "If running locally: check your `.env` file has `GROQ_API_KEY=your_key`.\n\n"
+        "If deployed on Streamlit Cloud: go to your app's Settings → Secrets, "
+        "and make sure it contains exactly:\n\n"
+        '```\nGROQ_API_KEY = "your_key_here"\n```\n\n'
+        "Then save and reboot the app."
+    )
+    st.stop()
+
 # ---------- Page settings ----------
 st.set_page_config(
     page_title="NotesGenie | AI Study Assistant",
