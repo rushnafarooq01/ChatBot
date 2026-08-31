@@ -10,6 +10,9 @@ from langchain_groq import ChatGroq
 
 load_dotenv()
 
+if "GROQ_API_KEY" in st.secrets:
+    os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+    
 # ---------- Page settings ----------
 st.set_page_config(
     page_title="NotesGenie | AI Study Assistant",
