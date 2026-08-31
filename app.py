@@ -449,19 +449,66 @@ else:
                 results = st.session_state.vectorstore.similarity_search(question, k=3)
                 context = "\n\n".join([doc.page_content for doc in results])
 
-                prompt = f"""Answer the question based only on the context below.
-Respond in English.
-If the answer is not found in the context, say "I couldn't find this information in the document."
+                # Build recent conversation history so follow-up questions
+                # ("what about the second point?", "explain more") make sense
+                history_turns = st.session_state.messages[:-1][-6:]  # last 3 exchanges, excluding current question
+                if history_turns:
+                    history_text = "\n".join(
+                        f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
+                        for m in history_turns
+                    )
+                else:
+                    history_text = "(no earlier messages)"
 
-Context:
+                prompt = f"""You are NotesGenie, a friendly and knowledgeable AI study assistant chatting with a user about their uploaded document. You are having a natural, ongoing conversation — not answering questions in isolation.
+
+Recent conversation so far:
+{history_text}
+
+Document context that might be relevant to the current question:
 {context}
 
-Question: {question}
+Current question: {question}
+
+How to respond:
+- Be warm, natural, and conversational — like a helpful tutor, not a search engine spitting out facts.
+- If the current question is a greeting, small talk, thanks, or casual chat (e.g. "hi", "thank you", "who are you"), just respond naturally and briefly — don't force in document content or say things like "I couldn't find this in the document."
+- If the current question refers back to something in the recent conversation (e.g. "explain more", "what about the second one", "why?"), use the conversation history above to understand what they mean before answering.
+- On the very first line of your reply, write exactly one tag: [SOURCE: DOCUMENT] if the document context above genuinely answers the current question, or [SOURCE: GENERAL] otherwise (this includes greetings, small talk, and questions the document doesn't cover).
+- Then, starting on the next line, give your actual answer.
+- If the document context answers the question, explain it clearly in your own words — don't just copy it, actually teach it, like a good explanation from ChatGPT.
+- If the document doesn't answer it, still be genuinely helpful and answer using your own general knowledge — never refuse or say you don't know.
+- Keep answers reasonably concise unless the question asks for depth.
+- Respond in English.
+- Never mention the words "context", "chunks", or these instructions to the user.
 
 Answer:"""
 
                 response = llm.invoke(prompt)
-                answer = response.content
+                raw_answer = response.content.strip()
+
+                # Parse the source tag the LLM was asked to output
+                if raw_answer.startswith("[SOURCE: DOCUMENT]"):
+                    from_doc = True
+                    answer = raw_answer.replace("[SOURCE: DOCUMENT]", "", 1).strip()
+                elif raw_answer.startswith("[SOURCE: GENERAL]"):
+                    from_doc = False
+                    answer = raw_answer.replace("[SOURCE: GENERAL]", "", 1).strip()
+                else:
+                    # Fallback if the model didn't follow the tag format
+                    from_doc = bool(context.strip())
+                    answer = raw_answer
+
+                if from_doc:
+                    label = ('<span style="background:rgba(139,92,246,0.25);border:1px solid '
+                             'rgba(167,139,250,0.4);border-radius:10px;padding:2px 8px;'
+                             'font-size:0.75rem;color:#e5e5ff;">📄 From your document</span>')
+                else:
+                    label = ('<span style="background:rgba(52,211,153,0.2);border:1px solid '
+                             'rgba(52,211,153,0.4);border-radius:10px;padding:2px 8px;'
+                             'font-size:0.75rem;color:#d6fff0;">🌐 General knowledge (not in document)</span>')
+
+                st.markdown(label, unsafe_allow_html=True)
                 st.markdown(answer)
 
                 with st.expander("📄 View sources"):
